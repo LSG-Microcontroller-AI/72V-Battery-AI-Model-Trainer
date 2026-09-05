@@ -41,6 +41,7 @@ float calculate_cosine_shape_similarity_percentage(const float* arr1, const floa
 int count_training_samples(int linesPerSample);
 int get_random_sample_first_line();
 bool get_sample_for_test(int sampleIndex);
+bool is_csv_header(const std::string& line);
 void setTime();
 float _err_epoca;
 float _err_rete = 0.00f;
@@ -451,8 +452,13 @@ void read_samples_from_file_diagram_battery() {
 	// Verifica se il file è stato aperto correttamente
 	if (!file.is_open()) {
 		std::cerr << "Errore nell'apertura del file " << filename << std::endl;
+		return;
 	}
 	std::string line;
+	if (!std::getline(file, line) || !is_csv_header(line)) {
+		std::cerr << "Intestazione CSV mancante o non valida nel file " << filename << std::endl;
+		return;
+	}
 	int training_block_index = 0;
 	int training_row_index = 0;
 	int training_row_pre_index = 0;
@@ -729,6 +735,11 @@ bool get_sample_for_test(int sampleIndex) {
 		std::cerr << "Errore nell'apertura del file: " << filename << std::endl;
 		return false;
 	}
+	std::string line;
+	if (!std::getline(file, line) || !is_csv_header(line)) {
+		std::cerr << "Intestazione CSV mancante o non valida nel file " << filename << std::endl;
+		return false;
+	}
 	// Ogni campione è composto da 8 righe; calcoliamo la riga iniziale del campione.
 	//const int linesPerSample = 8;
 	int startLine = sampleIndex - 1;// *linesPerSample;
@@ -741,7 +752,6 @@ bool get_sample_for_test(int sampleIndex) {
 			return false;
 		}
 	}
-	std::string line;
 	std::istringstream ss;
 	std::string token;
 	// Legge le prime 6 righe per aggiornare observed_data
@@ -831,9 +841,13 @@ int count_training_samples(int linesPerSample) {
 		std::cerr << "Errore nell'apertura del file: " << filename << std::endl;
 		return -1;
 	}
-	int totalLines = 0;
 	std::string line;
-	// Conta solo le righe non vuote
+	if (!std::getline(file, line) || !is_csv_header(line)) {
+		std::cerr << "Intestazione CSV mancante o non valida nel file " << filename << std::endl;
+		return -1;
+	}
+	int totalLines = 0;
+	// Conta solo le righe dati non vuote dopo l'intestazione.
 	while (std::getline(file, line)) {
 		if (!line.empty())
 			++totalLines;
@@ -846,4 +860,7 @@ int count_training_samples(int linesPerSample) {
 		return -1;
 	}
 	return totalLines / linesPerSample;
+}
+bool is_csv_header(const std::string& line) {
+	return line.rfind("IDMessage;Battery;Value;", 0) == 0;
 }
