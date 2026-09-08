@@ -14,6 +14,7 @@ using namespace std;
 #include <random>
 #include <thread>
 #include <vector>
+#include "battery_csv.h"
 #ifdef __linux__
 #elif _WIN32
 #include <conio.h>
@@ -38,16 +39,16 @@ float calculateVariance(const float* data, int size);
 float mean_value(const float* data, int size);
 float calculateErrorPercentage(float mse, float reference_mean);
 float calculate_cosine_shape_similarity_percentage(const float* arr1, const float* arr2, int size);
-int count_training_samples(int linesPerSample);
+int count_training_samples();
 int get_random_sample_first_line();
 bool get_sample_for_test(int sampleIndex);
-bool is_csv_header(const std::string& line);
+std::vector<battery_csv::Sample> csv_samples;
 void setTime();
 float _err_epoca;
 float _err_rete = 0.00f;
 float _err_amm = 0.009f;
 float _epsilon = 0.05f;
-uint8_t const lines_per_training_sample = 8;
+// Samples are parsed by record type: six batteries followed by Wh and amps.
 uint16_t const training_samples = 323;
 const int training_report_epoch_interval = 10000;
 const uint8_t numberOf_X = 2;
@@ -86,7 +87,7 @@ int main() {
 	//SetWindowPos(consoleWindow, nullptr, -1920, 0, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 	//ShowWindow(consoleWindow, SW_MAXIMIZE);
 #endif
-	int number_of_training_samples = count_training_samples(lines_per_training_sample);
+	int number_of_training_samples = count_training_samples();
 	if (number_of_training_samples != training_samples) {
 		cout << "\nError on samples number!!!!!! current value is set to " << training_samples << " but should be " << number_of_training_samples << "\n";
 		return 0;
@@ -427,7 +428,7 @@ void evaluate_model(float* error_list, float& max_error, float& average_error, i
 		_err_rete = calculate_max_output_error();
 		if (_err_rete > max_error) {
 			max_error = _err_rete;
-			max_error_file_index_line = ((p)*lines_per_training_sample) + 1;
+			max_error_file_index_line = csv_samples[p].first_line;
 		}
 		error_list[p] = _err_rete;
 		average_error += _err_rete;
@@ -445,90 +446,14 @@ void print_hidden_activation_status(const uint16_t* hidden_activation_count) {
 	}
 }
 void read_samples_from_file_diagram_battery() {
-	//std::cout << "Directory corrente: " << std::filesystem::current_path() << std::endl;
-	std::string filename = _relative_files_path + "/" + _files_name;
-	// Apertura del file
-	std::ifstream file(filename);
-	// Verifica se il file è stato aperto correttamente
-	if (!file.is_open()) {
-		std::cerr << "Errore nell'apertura del file " << filename << std::endl;
-		return;
-	}
-	std::string line;
-	if (!std::getline(file, line) || !is_csv_header(line)) {
-		std::cerr << "Intestazione CSV mancante o non valida nel file " << filename << std::endl;
-		return;
-	}
-	int training_block_index = 0;
-	int training_row_index = 0;
-	int training_row_pre_index = 0;
-	std::string item;
-	stringstream ss1;
-	while (!file.eof()) {
-		training_row_pre_index = training_row_index++;
-		switch (training_row_pre_index) {
-		case 0:
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-		case 5:
-			std::getline(file, line);
-			ss1.str(line);
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			battery_out_training[training_block_index][training_row_pre_index] = std::stod(item);
-			cout << "battery[" << training_block_index << "]" << "[" << training_row_pre_index << "] = " << battery_out_training[training_block_index][training_row_pre_index] << "\n";
-			break;
-		case 6:
-			std::getline(file, line);
-			ss1.str(line);
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			watts_hour_training[training_block_index] = std::stod(item);
-			cout << "Watts/hour[" << training_block_index << "] = " << watts_hour_training[training_block_index] << "\n";
-			break;
-		case 7:
-
-			std::getline(file, line);
-			ss1.str(line);
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			amps_training[training_block_index] = std::stod(item);
-			cout << "Ampere[" << training_block_index << "] = " << amps_training[training_block_index] << "\n";
-			break;
-		default:
-			training_block_index++;
-			training_row_index = 0;
-			break;
-		}
-	}
-#ifdef __linux__
-#elif _WIN32
-#else
-#endif
-	if ((training_block_index)+1 != training_samples) {
-		cout << "\n\nALLERT!!!!!!! training sample different to index = \t" << training_block_index << "\n";
-#ifdef __linux__
-#elif _WIN32
-		system("pause");
-#else
-#endif
-	}
-	else {
-		//cout << "\n\nTraining sample index is " << training_block_index << " and seems to have been loaded correctly.";
-#ifdef __linux__
-
-#elif _WIN32
-		//system("pause");
-#else
-
-#endif
-	}
-	file.close();
+    if (csv_samples.size() != training_samples)
+        throw std::runtime_error("Numero campioni CSV diverso da training_samples");
+    for (size_t p = 0; p < csv_samples.size(); ++p) {
+        for (int i = 0; i < numberOf_Y; ++i)
+            battery_out_training[p][i] = csv_samples[p].batteries[i];
+        watts_hour_training[p] = csv_samples[p].watt_hours;
+        amps_training[p] = csv_samples[p].amps;
+    }
 }
 void read_weights_from_file() {
 	std::ifstream in(_relative_files_path + "/" + "model.hex", std::ios_base::binary);
@@ -723,144 +648,29 @@ void setTime() {
 	std::strftime(_global_time, sizeof(_global_time), "%H:%M:%S", &local_time);
 }
 int get_random_sample_first_line() {
-	static std::mt19937 random_generator(std::random_device{}());
-	std::uniform_int_distribution<int> sample_distribution(0, training_samples - 1);
-	return sample_distribution(random_generator) * lines_per_training_sample + 1;
+    if (csv_samples.empty()) return -1;
+    static std::mt19937 random_generator(std::random_device{}());
+    std::uniform_int_distribution<size_t> sample_distribution(0, csv_samples.size() - 1);
+    return csv_samples[sample_distribution(random_generator)].first_line;
 }
 bool get_sample_for_test(int sampleIndex) {
-	// Composizione del path completo del file
-	std::string filename = _relative_files_path + "/" + _files_name;
-	std::ifstream file(filename);
-	if (!file.is_open()) {
-		std::cerr << "Errore nell'apertura del file: " << filename << std::endl;
-		return false;
-	}
-	std::string line;
-	if (!std::getline(file, line) || !is_csv_header(line)) {
-		std::cerr << "Intestazione CSV mancante o non valida nel file " << filename << std::endl;
-		return false;
-	}
-	// Ogni campione è composto da 8 righe; calcoliamo la riga iniziale del campione.
-	//const int linesPerSample = 8;
-	int startLine = sampleIndex - 1;// *linesPerSample;
-	// Salta le righe fino al campione desiderato
-	std::string dummy;
-	for (int i = 0; i < startLine; ++i) {
-		if (!std::getline(file, dummy)) {
-			std::cerr << "Errore: file terminato prematuramente durante lo skip fino al campione "
-				<< sampleIndex << std::endl;
-			return false;
-		}
-	}
-	std::istringstream ss;
-	std::string token;
-	// Legge le prime 6 righe per aggiornare observed_data
-	for (int i = 0; i < 6; ++i) {
-		if (!std::getline(file, line)) {
-			std::cerr << "Errore: file terminato prematuramente nella lettura di observed_data, campione "
-				<< sampleIndex << std::endl;
-			return false;
-		}
-		if (line.empty()) {
-			--i;
-			continue;
-		}
-		ss.clear();
-		ss.str(line);
-		// Legge il primo token (es. "0")
-		std::getline(ss, token, ';');
-		// Legge il secondo token (es. "B0", "B1", ecc.) e lo scarta
-		std::getline(ss, token, ';');
-		// Legge il terzo token (il valore da utilizzare)
-		std::getline(ss, token, ';');
-		try {
-			observed_data[i] = std::stof(token);
-		}
-		catch (const std::exception& e) {
-			std::cerr << "Errore nella conversione del valore nella riga " << (startLine + i + 1)
-				<< ": \"" << token << "\"." << std::endl;
-			return false;
-		}
-	}
-
-	// Legge la settima riga (wattora) per aggiornare x[1]
-	if (!std::getline(file, line)) {
-		std::cerr << "Errore: file terminato prematuramente nella lettura di x[1] (riga "
-			<< (startLine + 7) << ")." << std::endl;
-		return false;
-	}
-	while (line.empty() && std::getline(file, line)) {}
-	ss.clear();
-	ss.str(line);
-	// Legge il primo token (es. "watts")
-	std::getline(ss, token, ';');
-	// Salta il secondo token
-	std::getline(ss, token, ';');
-	// Legge il terzo token (il valore per x[1])
-	std::getline(ss, token, ';');
-	try {
-		x[1] = std::stof(token);
-	}
-	catch (const std::exception& e) {
-		std::cerr << "Errore nella conversione del valore nella riga " << (startLine + 7)
-			<< " per x[1]: \"" << token << "\"." << std::endl;
-		return false;
-	}
-
-	// Legge l'ottava riga (ampere) per aggiornare x[0]
-	if (!std::getline(file, line)) {
-		std::cerr << "Errore: file terminato prematuramente nella lettura di x[0] (riga "
-			<< (startLine + 8) << ")." << std::endl;
-		return false;
-	}
-	while (line.empty() && std::getline(file, line)) {}
-	ss.clear();
-	ss.str(line);
-	// Legge il primo token (es. "amps")
-	std::getline(ss, token, ';');
-	// Salta il secondo token
-	std::getline(ss, token, ';');
-	// Legge il terzo token (il valore per x[0])
-	std::getline(ss, token, ';');
-	try {
-		x[0] = std::stof(token);
-	}
-	catch (const std::exception& e) {
-		std::cerr << "Errore nella conversione del valore nella riga " << (startLine + 8)
-			<< " per x[0]: \"" << token << "\"." << std::endl;
-		return false;
-	}
-	file.close();
-	return true;
+    for (const auto& sample : csv_samples) {
+        if (sample.first_line != sampleIndex) continue;
+        for (int i = 0; i < numberOf_Y; ++i) observed_data[i] = sample.batteries[i];
+        x[0] = sample.amps;
+        x[1] = sample.watt_hours;
+        return true;
+    }
+    std::cerr << "Campione CSV non trovato alla riga " << sampleIndex << std::endl;
+    return false;
 }
-int count_training_samples(int linesPerSample) {
-	// Componi il percorso completo del file
-	std::string filename = _relative_files_path + "/" + _files_name;
-	std::ifstream file(filename);
-	if (!file.is_open()) {
-		std::cerr << "Errore nell'apertura del file: " << filename << std::endl;
-		return -1;
-	}
-	std::string line;
-	if (!std::getline(file, line) || !is_csv_header(line)) {
-		std::cerr << "Intestazione CSV mancante o non valida nel file " << filename << std::endl;
-		return -1;
-	}
-	int totalLines = 0;
-	// Conta solo le righe dati non vuote dopo l'intestazione.
-	while (std::getline(file, line)) {
-		if (!line.empty())
-			++totalLines;
-	}
-	file.close();
-	// Verifica che il numero totale di righe sia divisibile per linesPerSample
-	if (totalLines % linesPerSample != 0) {
-		std::cerr << "Il numero totale di righe (" << totalLines
-			<< ") non è divisibile per " << linesPerSample << std::endl;
-		return -1;
-	}
-	return totalLines / linesPerSample;
-}
-bool is_csv_header(const std::string& line) {
-	return line.rfind("IDMessage;Battery;Value;", 0) == 0;
+int count_training_samples() {
+    csv_samples.clear();
+    try {
+        csv_samples = battery_csv::read(_relative_files_path + "/" + _files_name);
+        return static_cast<int>(csv_samples.size());
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return -1;
+    }
 }
