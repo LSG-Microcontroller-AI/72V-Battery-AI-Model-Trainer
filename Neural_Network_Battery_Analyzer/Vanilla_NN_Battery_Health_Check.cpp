@@ -64,7 +64,7 @@ static_assert(epsilon_reduction_time_minutes > 0, "epsilon_reduction_time_minute
 #endif
 float _epsilon = epsilon_start;
 // Samples are parsed by record type: six batteries followed by Wh and amps.
-uint16_t const training_samples = 323;
+uint16_t const training_samples = 356;
 const int training_report_epoch_interval = 10000;
 const uint8_t numberOf_X = 2;
 const uint8_t numberOf_H = 25;
