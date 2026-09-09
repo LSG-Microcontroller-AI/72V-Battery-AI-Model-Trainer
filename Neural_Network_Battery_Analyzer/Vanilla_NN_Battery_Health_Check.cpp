@@ -56,7 +56,7 @@ float _err_amm = 0.009f;
 constexpr float epsilon_start = 0.5f;
 #if AUTOMATIC_EPSILON_CHANGE
 constexpr float epsilon_end = 0.0001f;
-constexpr float epsilon_reduction_factor = 0.8f;
+constexpr float epsilon_reduction_factor = 0.8f;  // Reduce epsilon , for example, by 20% (0.8) when the error does not improve for a certain number of epochs.
 constexpr uint32_t epsilon_reduction_time_minutes = 10;
 static_assert(epsilon_start >= epsilon_end, "epsilon_start must be greater than or equal to epsilon_end");
 static_assert(epsilon_reduction_factor > 0.0f && epsilon_reduction_factor < 1.0f, "epsilon_reduction_factor must be between zero and one");
