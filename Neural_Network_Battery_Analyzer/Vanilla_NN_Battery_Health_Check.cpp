@@ -15,6 +15,12 @@ using namespace std;
 #include <thread>
 #include <vector>
 #include "battery_csv.h"
+#ifndef AUTOMATIC_EPSILON_CHANGE
+#define AUTOMATIC_EPSILON_CHANGE 1 // 1: automatic reduction, 0: manual change
+#endif
+#if AUTOMATIC_EPSILON_CHANGE != 0 && AUTOMATIC_EPSILON_CHANGE != 1
+#error AUTOMATIC_EPSILON_CHANGE must be 0 or 1
+#endif
 #ifdef __linux__
 #elif _WIN32
 #include <conio.h>
@@ -47,7 +53,16 @@ void setTime();
 float _err_epoca;
 float _err_rete = 0.00f;
 float _err_amm = 0.009f;
-float _epsilon = 0.5f;
+constexpr float epsilon_start = 0.5f;
+#if AUTOMATIC_EPSILON_CHANGE
+constexpr float epsilon_end = 0.0001f;
+constexpr float epsilon_reduction_factor = 0.8f;
+constexpr uint32_t epsilon_reduction_time_minutes = 10;
+static_assert(epsilon_start >= epsilon_end, "epsilon_start must be greater than or equal to epsilon_end");
+static_assert(epsilon_reduction_factor > 0.0f && epsilon_reduction_factor < 1.0f, "epsilon_reduction_factor must be between zero and one");
+static_assert(epsilon_reduction_time_minutes > 0, "epsilon_reduction_time_minutes must be greater than zero");
+#endif
+float _epsilon = epsilon_start;
 // Samples are parsed by record type: six batteries followed by Wh and amps.
 uint16_t const training_samples = 323;
 const int training_report_epoch_interval = 10000;
@@ -114,7 +129,11 @@ int main() {
 	else if (response == 'c') {
 		cout << "\nmodel loaded.\n";
 		read_weights_from_file();
-		cout << "\nlast inserted epsilon is : " << _epsilon <<
+		_epsilon = epsilon_start;
+#if AUTOMATIC_EPSILON_CHANGE
+		cout << "\nautomatic epsilon change enabled. epsilon starts at: " << _epsilon << "\n";
+#else
+		cout << "\nconfigured epsilon start is : " << _epsilon <<
 			" do you wanna change it? y or n\n";
 #ifdef __linux__
 		response = std::cin.get();
@@ -130,6 +149,7 @@ int main() {
 		else {
 			cout << "\n epsilon not changed\n";
 		}
+#endif
 		apprendi();
 	}
 	else if (response == 'n') {
@@ -272,7 +292,9 @@ void apprendi() {
 	int max_error_file_index_line = 0;
 	int _epoca_index = 0;
 	int cout_counter = 0;
-	auto start = std::chrono::system_clock::now();
+#if AUTOMATIC_EPSILON_CHANGE
+	auto last_improvement_or_epsilon_reduction_time = std::chrono::steady_clock::now();
+#endif
 	read_samples_from_file_diagram_battery();
 	float average_err_rete = 0.00f;
 	float varianza_err_rete = 0.00f;
@@ -317,8 +339,26 @@ void apprendi() {
 			}
 			else {
 				setTime();
+#if AUTOMATIC_EPSILON_CHANGE
+				last_improvement_or_epsilon_reduction_time = std::chrono::steady_clock::now();
+#endif
 			}
 		}
+#if AUTOMATIC_EPSILON_CHANGE
+		if (_epsilon > epsilon_end) {
+			auto current_time = std::chrono::steady_clock::now();
+			auto minutes_without_improvement = std::chrono::duration_cast<std::chrono::minutes>(current_time - last_improvement_or_epsilon_reduction_time).count();
+			if (minutes_without_improvement >= epsilon_reduction_time_minutes) {
+				float previous_epsilon = _epsilon;
+				_epsilon *= epsilon_reduction_factor;
+				if (_epsilon < epsilon_end) {
+					_epsilon = epsilon_end;
+				}
+				last_improvement_or_epsilon_reduction_time = current_time;
+				std::cout << "\nepsilon automatically reduced from " << previous_epsilon << " to " << _epsilon << "\n";
+			}
+		}
+#endif
 		if (cout_counter == training_report_epoch_interval) {
 			std::cout << "\nepoca:" << _epoca_index <<
 				"\nerr_epoca=" << _err_epoca <<
@@ -328,8 +368,25 @@ void apprendi() {
 				"\nmedia di errore di rete = " << average_err_rete <<
 				"\ndeviazione standard errore di rete = " << deviazione_std_err_rete <<
 				"\nmax err_epoca is on sample line = " << max_error_file_index_line <<
-				"\npercentage dev.standard err_rete / media err_rete = " << (average_err_rete > 0.0f ? (deviazione_std_err_rete / average_err_rete) * 100.0f : 0.0f) << "%" <<
-				"\nepsilon=" << _epsilon << "\n";
+				"\npercentage dev.standard err_rete / media err_rete = " << (average_err_rete > 0.0f ? (deviazione_std_err_rete / average_err_rete) * 100.0f : 0.0f) << "%";
+#if AUTOMATIC_EPSILON_CHANGE
+			if (_epsilon > epsilon_end) {
+				auto epsilon_status_time = std::chrono::steady_clock::now();
+				auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(epsilon_status_time - last_improvement_or_epsilon_reduction_time).count();
+				long long reduction_interval_seconds = static_cast<long long>(epsilon_reduction_time_minutes) * 60;
+				long long remaining_seconds = reduction_interval_seconds - elapsed_seconds;
+				if (remaining_seconds < 0) {
+					remaining_seconds = 0;
+				}
+				long long remaining_minutes = (remaining_seconds + 59) / 60;
+				std::cout << "\nepsilon=" << _epsilon << " | AUTO x" << epsilon_reduction_factor << " | next change in=" << remaining_minutes << " min\n";
+			}
+			else {
+				std::cout << "\nepsilon=" << _epsilon << " | AUTO x" << epsilon_reduction_factor << " | minimum reached\n";
+			}
+#else
+			std::cout << "\nepsilon=" << _epsilon << " | MANUAL\n";
+#endif
 			print_hidden_activation_status(hidden_activation_count);
 			cout_counter = 0;
 		}
