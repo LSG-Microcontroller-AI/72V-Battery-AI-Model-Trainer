@@ -47,7 +47,7 @@ void setTime();
 float _err_epoca;
 float _err_rete = 0.00f;
 float _err_amm = 0.009f;
-float _epsilon = 0.05f;
+float _epsilon = 0.5f;
 // Samples are parsed by record type: six batteries followed by Wh and amps.
 uint16_t const training_samples = 323;
 const int training_report_epoch_interval = 10000;
