@@ -34,8 +34,9 @@ void apprendi();
 void back_propagate();
 float calculate_max_output_error();
 void evaluate_model(float* error_list, float& max_error, float& average_error, int& max_error_file_index_line, uint16_t* hidden_activation_count);
-void read_weights_from_file();
+bool read_weights_from_file();
 bool write_weights_on_file();
+bool write_epsilon_on_file();
 void read_samples_from_file_diagram_battery();
 void print_hidden_activation_status(const uint16_t* hidden_activation_count);
 //float overallMean(const float* arr1, const float* arr2, int size);
@@ -52,10 +53,10 @@ std::vector<battery_csv::Sample> csv_samples;
 void setTime();
 float _err_epoca;
 float _err_rete = 0.00f;
-float _err_amm = 0.009f;
-constexpr float epsilon_start = 0.5f;
+float _err_amm = 0.00009f;
+constexpr float epsilon_start = 0.05f;
 #if AUTOMATIC_EPSILON_CHANGE
-constexpr float epsilon_end = 0.0001f;
+constexpr float epsilon_end = 0.000001f;
 constexpr float epsilon_reduction_factor = 0.8f;  // Reduce epsilon , for example, by 20% (0.8) when the error does not improve for a certain number of epochs.
 constexpr uint32_t epsilon_reduction_time_minutes = 10;
 static_assert(epsilon_start >= epsilon_end, "epsilon_start must be greater than or equal to epsilon_end");
@@ -64,7 +65,7 @@ static_assert(epsilon_reduction_time_minutes > 0, "epsilon_reduction_time_minute
 #endif
 float _epsilon = epsilon_start;
 // Samples are parsed by record type: six batteries followed by Wh and amps.
-uint16_t const training_samples = 356;
+uint16_t const training_samples = 352;
 const int training_report_epoch_interval = 10000;
 const uint8_t numberOf_X = 2;
 const uint8_t numberOf_H = 25;
@@ -123,15 +124,18 @@ int main() {
 	response = _getch();
 #endif
 	if (response == 'e' || response == 'E') {
-		read_weights_from_file();
+		if (!read_weights_from_file()) {
+			return 1;
+		}
 		predict();
 	}
 	else if (response == 'c') {
+		if (!read_weights_from_file()) {
+			return 1;
+		}
 		cout << "\nmodel loaded.\n";
-		read_weights_from_file();
-		_epsilon = epsilon_start;
 #if AUTOMATIC_EPSILON_CHANGE
-		cout << "\nautomatic epsilon change enabled. epsilon starts at: " << _epsilon << "\n";
+		cout << "\nautomatic epsilon change enabled. epsilon resumes at: " << _epsilon << "\n";
 #else
 		cout << "\nconfigured epsilon start is : " << _epsilon <<
 			" do you wanna change it? y or n\n";
@@ -354,6 +358,11 @@ void apprendi() {
 				if (_epsilon < epsilon_end) {
 					_epsilon = epsilon_end;
 				}
+				if (!write_epsilon_on_file()) {
+					_epsilon = previous_epsilon;
+					std::cerr << "\nTraining stopped because the reduced epsilon could not be saved.\n";
+					return;
+				}
 				last_improvement_or_epsilon_reduction_time = current_time;
 				std::cout << "\nepsilon automatically reduced from " << previous_epsilon << " to " << _epsilon << "\n";
 			}
@@ -512,33 +521,40 @@ void read_samples_from_file_diagram_battery() {
         amps_training[p] = csv_samples[p].amps;
     }
 }
-void read_weights_from_file() {
+bool read_weights_from_file() {
 	std::ifstream in(_relative_files_path + "/" + "model.hex", std::ios_base::binary);
-	if (in.good()) {
+	if (!in.good()) {
+		std::cerr << "\nUnable to read model file.\n";
+		return false;
+	}
+	for (int k = 0; k < numberOf_H; k++) {
+		for (int i = 0; i < numberOf_X; i++) {
+			in.read((char*)&W1[i][k], sizeof(float));
+		}
+		in.read((char*)&hidden_bias[k], sizeof(float));
+		cout << hidden_bias[k] << "\n";
+	}
+	for (int j = 0; j < numberOf_Y; j++) {
 		for (int k = 0; k < numberOf_H; k++) {
-			for (int i = 0; i < numberOf_X; i++) {
-				in.read((char*)&W1[i][k], sizeof(float));
-			}
+			in.read((char*)&W2[k][j], sizeof(float));
+		}
+		in.read((char*)&output_bias[j], sizeof(float));
+	}
+	/*	for (int k = 0; k < numberOf_H; k++) {
 			in.read((char*)&hidden_bias[k], sizeof(float));
-			cout << hidden_bias[k] << "\n";
 		}
 		for (int j = 0; j < numberOf_Y; j++) {
-			for (int k = 0; k < numberOf_H; k++) {
-				in.read((char*)&W2[k][j], sizeof(float));
-			}
 			in.read((char*)&output_bias[j], sizeof(float));
-		}
-		/*	for (int k = 0; k < numberOf_H; k++) {
-				in.read((char*)&hidden_bias[k], sizeof(float));
-			}
-			for (int j = 0; j < numberOf_Y; j++) {
-				in.read((char*)&output_bias[j], sizeof(float));
-			}*/
-		in.read((char*)&_err_epoca_min_value, sizeof(float));
-		in.read((char*)&_epsilon, sizeof(float));
-		//in.read((char*)&x[numberOf_X - 1], sizeof(float));
-		//in.read((char*)&h[numberOf_H - 1], sizeof(float));
+		}*/
+	in.read((char*)&_err_epoca_min_value, sizeof(float));
+	in.read((char*)&_epsilon, sizeof(float));
+	//in.read((char*)&x[numberOf_X - 1], sizeof(float));
+	//in.read((char*)&h[numberOf_H - 1], sizeof(float));
+	if (!in.good() || !std::isfinite(_epsilon) || _epsilon <= 0.0f) {
+		std::cerr << "\nInvalid or incomplete model file.\n";
+		return false;
 	}
+	return true;
 }
 bool write_weights_on_file() {
 	const std::string model_path = _relative_files_path + "/" + "model.hex";
@@ -578,6 +594,24 @@ bool write_weights_on_file() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 	std::cerr << "\nUnable to write model file: " << model_path << "\n";
+	return false;
+}
+bool write_epsilon_on_file() {
+	const std::string model_path = _relative_files_path + "/" + "model.hex";
+	const uint8_t max_write_attempts = 10;
+	for (uint8_t attempt = 0; attempt < max_write_attempts; attempt++) {
+		std::fstream model_file(model_path, std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+		if (model_file.good()) {
+			model_file.seekp(-static_cast<std::streamoff>(sizeof(float)), std::ios_base::end);
+			model_file.write((char*)&_epsilon, sizeof(float));
+			model_file.close();
+			if (model_file.good()) {
+				return true;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	std::cerr << "\nUnable to save epsilon in model file: " << model_path << "\n";
 	return false;
 }
 void normalizeArray(float* arr, float* normArr, int size) {
