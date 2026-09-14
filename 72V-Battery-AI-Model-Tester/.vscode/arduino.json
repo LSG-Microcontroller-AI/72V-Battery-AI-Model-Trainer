@@ -1,5 +1,5 @@
 {
     "board": "arduino:avr:uno",
-    "sketch": "AI_battery_analyser.ino",
+    "sketch": "72V-Battery-AI-Model-Tester.ino",
     "programmer": "usbtinyisp"
 }

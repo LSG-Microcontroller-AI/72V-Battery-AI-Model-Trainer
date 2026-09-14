@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Neural Network Battery Analyzer (LLDB)",
+      "name": "Debug 72 Volts Battery AI Model Trainer (LLDB)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/Debug/outDebug",
+      "program": "${workspaceFolder}/build/Debug/72V-Battery-AI-Model-Trainer",
       "args": [],
       "cwd": "${workspaceFolder}",
       "terminal": "external",
@@ -13,10 +13,10 @@
       "preLaunchTask": "Build C++: Debug"
     },
     {
-      "name": "Release Neural Network Battery Analyzer (LLDB)",
+      "name": "Release 72 Volts Battery AI Model Trainer (LLDB)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/Release/outRelease",
+      "program": "${workspaceFolder}/build/Release/72V-Battery-AI-Model-Trainer",
       "args": [],
       "cwd": "${workspaceFolder}",
       "terminal": "external",

@@ -1,5 +1,5 @@
 /*
- Name:		AI_battery_analyser.ino
+ Name:		72V-Battery-AI-Model-Tester.ino
  Created:	2/18/2025 12:52:20 PM
  Author:	luigi.santagada
 */

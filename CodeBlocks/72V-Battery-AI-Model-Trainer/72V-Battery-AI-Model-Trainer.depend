@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1730363424 source:/home/luigi/Repo/LSG-Microcontroller-AI/Vanilla-AI-Development/Lifepo4-Discharge-Model/Lifepo4-Discharge-Model.cpp
+1730363424 source:/home/luigi/Repo/LSG-Microcontroller-AI/72Volts-Battery-Health-Check/72V-Battery-AI-Model-Trainer/72V-Battery-AI-Model-Trainer.cpp
 	<iostream>
 	<cmath>
 	<stdlib.h>
@@ -14,7 +14,7 @@
 	<conio.h>
 	<windows.h>
 
-1743952470 source:c:\repos\lsg-microcontroller-ai\vanilla-ai-72volts-health-check-battery\lifepo4-discharge-model\lifepo4-discharge-model.cpp
+1743952470 source:c:\repo\lsg-microcontroller-ai\72volts-battery-health-check\72v-battery-ai-model-trainer\72v-battery-ai-model-trainer.cpp
 	<iostream>
 	<cmath>
 	<stdlib.h>
@@ -129,11 +129,11 @@
 1702721230 c:\vcpkg\installed\x64-windows\include\gl\gl.h
 	<winapifamily.h>
 
-1743675082 c:\repos\lsg-microcontroller-ai\vanilla-ai-72volts-health-check-battery\lifepo4-discharge-model\plot_renderer.h
+1743675082 c:\repo\lsg-microcontroller-ai\72volts-battery-health-check\72v-battery-ai-model-trainer\plot_renderer.h
 	<vector>
 	<algorithm>
 
-1743956018 source:/home/luigi/Repo/LSG-Microcontroller-AI/Vanilla-AI-72Volts-Health-check-battery/Lifepo4-Discharge-Model/Lifepo4-Discharge-Model.cpp
+1743956018 source:/home/luigi/Repo/LSG-Microcontroller-AI/72Volts-Battery-Health-Check/72V-Battery-AI-Model-Trainer/72V-Battery-AI-Model-Trainer.cpp
 	<iostream>
 	<cmath>
 	<stdlib.h>
@@ -150,7 +150,7 @@
 	<conio.h>
 	<windows.h>
 
-1743942458 /home/luigi/Repo/LSG-Microcontroller-AI/Vanilla-AI-72Volts-Health-check-battery/Lifepo4-Discharge-Model/plot_renderer.h
+1743942458 /home/luigi/Repo/LSG-Microcontroller-AI/72Volts-Battery-Health-Check/72V-Battery-AI-Model-Trainer/plot_renderer.h
 	<vector>
 	<algorithm>
 

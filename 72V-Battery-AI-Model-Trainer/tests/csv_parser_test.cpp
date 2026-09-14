@@ -1,5 +1,5 @@
-#define main analyzer_main
-#include "../Vanilla_NN_Battery_Health_Check.cpp"
+#define main trainer_main
+#include "../72V-Battery-AI-Model-Trainer.cpp"
 #undef main
 #include <cassert>
 #include <cstdio>

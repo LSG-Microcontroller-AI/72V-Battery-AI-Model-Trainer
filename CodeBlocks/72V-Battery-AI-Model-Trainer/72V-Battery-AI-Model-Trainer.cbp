@@ -2,15 +2,15 @@
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
-		<Option title="Vanilla-AI-Development" />
+		<Option title="72V-Battery-AI-Model-Trainer" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="Debug">
-				<Option output="bin/Debug/Vanilla-AI-Development" prefix_auto="1" extension_auto="1" />
+				<Option output="bin/Debug/72V-Battery-AI-Model-Trainer" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
-<Option working_dir="../../Neural_Network_Battery_Analyzer" />
+<Option working_dir="../../72V-Battery-AI-Model-Trainer" />
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-g" />
@@ -20,10 +20,10 @@
 				</Linker>
 			</Target>
 			<Target title="Release">
-				<Option output="bin/Release/Vanilla-AI-Development" prefix_auto="1" extension_auto="1" />
+				<Option output="bin/Release/72V-Battery-AI-Model-Trainer" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
-<Option working_dir="../../Neural_Network_Battery_Analyzer" />
+<Option working_dir="../../72V-Battery-AI-Model-Trainer" />
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-O2" />
@@ -41,8 +41,8 @@
 		<Linker>
 			<Add directory="../../../../../vcpkg/installed/x64-windows/lib" />
 		</Linker>
-		<Unit filename="../../Neural_Network_Battery_Analyzer/Vanilla_NN_Battery_Health_Check.cpp" />
-		<Unit filename="../../Neural_Network_Battery_Analyzer/battery_csv.h" />
+		<Unit filename="../../72V-Battery-AI-Model-Trainer/72V-Battery-AI-Model-Trainer.cpp" />
+		<Unit filename="../../72V-Battery-AI-Model-Trainer/battery_csv.h" />
 <Extensions />
 	</Project>
 </CodeBlocks_project_file>

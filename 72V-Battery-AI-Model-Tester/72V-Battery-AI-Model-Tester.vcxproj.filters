@@ -20,13 +20,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Micro_AI_72V_Battery_Analyser.ino" />
+    <ClCompile Include="72V-Battery-AI-Model-Tester.ino" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="__vm\.AI_battery_analyser.vsarduino.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="__vm\.Micro_AI_72V_Battery_Analyser.vsarduino.h">
+    <ClInclude Include="__vm\.72V-Battery-AI-Model-Tester.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

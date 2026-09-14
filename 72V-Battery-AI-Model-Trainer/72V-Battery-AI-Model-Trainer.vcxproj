@@ -18,7 +18,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Vanilla_NN_Battery_Health_Check.cpp" />
+    <ClCompile Include="72V-Battery-AI-Model-Trainer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="72V-Battery-S11\72V_Battery.CSV" />
@@ -31,9 +31,9 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{FD06033E-A964-463D-A065-B08746662F03}</ProjectGuid>
-    <RootNamespace>ConsoleApplication1</RootNamespace>
+    <RootNamespace>BatteryAIModelTrainer72V</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>Neural_Network_Battery_Analyzer</ProjectName>
+    <ProjectName>72V-Battery-AI-Model-Trainer</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
