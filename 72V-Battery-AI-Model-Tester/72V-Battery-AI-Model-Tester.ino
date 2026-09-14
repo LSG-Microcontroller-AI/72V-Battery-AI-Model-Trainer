@@ -5,13 +5,25 @@
 */
 #include <Arduino.h>
 #include <SoftwareSerial.h>
+#ifndef _DEBUG_FOR_SERIAL
+#define _DEBUG_FOR_SERIAL 0
+#endif
+#if _DEBUG_FOR_SERIAL
+#define DEBUG_SERIAL_PRINT(...) do { Serial.print(__VA_ARGS__); } while (0)
+#define DEBUG_SERIAL_PRINTLN(...) do { Serial.println(__VA_ARGS__); } while (0)
+#else
+#define DEBUG_SERIAL_PRINT(...) do { } while (0)
+#define DEBUG_SERIAL_PRINTLN(...) do { } while (0)
+#endif
 //#ifndef RAMSTART
 //extern int __data_start;
 //#endif
 //extern int __bss_end;
 //extern void* __brkval;
+#if _DEBUG_FOR_SERIAL
 extern char __heap_start;
 extern void* __brkval;
+#endif
 #include <EEPROM.h>
 const uint8_t numberOf_X = 2;
 const uint8_t numberOf_H = 25;
@@ -49,10 +61,9 @@ void setup() {
 // the loop function runs over and over again until power down or reset
 void loop() {
 	//simulateTransmission();
-	int ram_libera = freeMemory();
-	Serial.print(F("RAM libera: "));
-	Serial.print(ram_libera);
-	Serial.println(F(" byte"));
+	DEBUG_SERIAL_PRINT(F("RAM libera: "));
+	DEBUG_SERIAL_PRINT(freeMemory());
+	DEBUG_SERIAL_PRINTLN(F(" byte"));
 	x[0] = 29.00f;
 	x[1] = 479.00f;
 	x[0] = log(x[0] + 1.0f) / 10.0f;
@@ -296,18 +307,18 @@ void processDataStream(const byte* stream, int streamSize) {
 			memcpy(&transmittedChecksum, stream + i + headerSize + dataSize, checksumSize);
 			float computedChecksum = computeChecksum(values, numFloats);
 			if (fabs(transmittedChecksum - computedChecksum) < 0.0001f) {
-				Serial.print("Packet valido trovato a indice ");
-				Serial.println(i);
+				DEBUG_SERIAL_PRINT(F("Packet valido trovato a indice "));
+				DEBUG_SERIAL_PRINTLN(i);
 				for (int j = 0; j < numFloats; j++) {
-					Serial.print(F("Value "));
-					Serial.print(j);
-					Serial.print(F(": "));
-					Serial.println(values[j]);
+					DEBUG_SERIAL_PRINT(F("Value "));
+					DEBUG_SERIAL_PRINT(j);
+					DEBUG_SERIAL_PRINT(F(": "));
+					DEBUG_SERIAL_PRINTLN(values[j]);
 				}
 			}
 			else {
-				Serial.print(F("Packet NON valido (checksum errato) a indice "));
-				Serial.println(i);
+				DEBUG_SERIAL_PRINT(F("Packet NON valido (checksum errato) a indice "));
+				DEBUG_SERIAL_PRINTLN(i);
 			}
 			i += packetSize; // Salta il pacchetto trovato
 		}
@@ -349,7 +360,9 @@ void buildPacket(byte* packet, const float* values, bool correctChecksum) {
 //	}
 //	return free_memory;
 //}
+#if _DEBUG_FOR_SERIAL
 unsigned int freeMemory() {
 	char top;
 	return (unsigned int)&top - (unsigned int)(__brkval == 0 ? &__heap_start : __brkval);
 }
+#endif
