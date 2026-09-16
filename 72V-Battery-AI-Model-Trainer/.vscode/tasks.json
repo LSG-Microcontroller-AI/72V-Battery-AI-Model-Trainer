@@ -30,9 +30,9 @@
 				"-O0",
 				"-Wall",
 				"-Wextra",
-				"${workspaceFolder}/Vanilla_NN_Battery_Health_Check.cpp",
+				"${workspaceFolder}/72V-Battery-AI-Model-Trainer.cpp",
 				"-o",
-				"${workspaceFolder}/build/Debug/outDebug"
+				"${workspaceFolder}/build/Debug/72V-Battery-AI-Model-Trainer"
 			],
 			"windows": {
 				"command": "cl.exe",
@@ -43,9 +43,9 @@
 					"/EHsc",
 					"/W3",
 					"/nologo",
-					"/Fe:${workspaceFolder}\\build\\Debug\\outDebug.exe",
-					"/Fd:${workspaceFolder}\\build\\Debug\\outDebug.pdb",
-					"${workspaceFolder}\\Vanilla_NN_Battery_Health_Check.cpp"
+					"/Fe:${workspaceFolder}\\build\\Debug\\72V-Battery-AI-Model-Trainer.exe",
+					"/Fd:${workspaceFolder}\\build\\Debug\\72V-Battery-AI-Model-Trainer.pdb",
+					"${workspaceFolder}\\72V-Battery-AI-Model-Trainer.cpp"
 				],
 				"problemMatcher": ["$msCompile"]
 			},
@@ -71,9 +71,9 @@
 				"-DNDEBUG",
 				"-Wall",
 				"-Wextra",
-				"${workspaceFolder}/Vanilla_NN_Battery_Health_Check.cpp",
+				"${workspaceFolder}/72V-Battery-AI-Model-Trainer.cpp",
 				"-o",
-				"${workspaceFolder}/build/Release/outRelease"
+				"${workspaceFolder}/build/Release/72V-Battery-AI-Model-Trainer"
 			],
 			"windows": {
 				"command": "cl.exe",
@@ -84,8 +84,8 @@
 					"/EHsc",
 					"/W3",
 					"/nologo",
-					"/Fe:${workspaceFolder}\\build\\Release\\outRelease.exe",
-					"${workspaceFolder}\\Vanilla_NN_Battery_Health_Check.cpp"
+					"/Fe:${workspaceFolder}\\build\\Release\\72V-Battery-AI-Model-Trainer.exe",
+					"${workspaceFolder}\\72V-Battery-AI-Model-Trainer.cpp"
 				],
 				"problemMatcher": ["$msCompile"]
 			},
@@ -100,7 +100,7 @@
 		{
 			"label": "Run C++: Debug (interactive)",
 			"type": "process",
-			"command": "${workspaceFolder}/build/Debug/outDebug",
+			"command": "${workspaceFolder}/build/Debug/72V-Battery-AI-Model-Trainer",
 			"args": [],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -122,9 +122,9 @@
 			"args": [
 				"-hold",
 				"-title",
-				"Neural Network Battery Analyzer",
+				"72 Volts Battery AI Model Trainer",
 				"-e",
-				"${workspaceFolder}/build/Debug/outDebug"
+				"${workspaceFolder}/build/Debug/72V-Battery-AI-Model-Trainer"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"

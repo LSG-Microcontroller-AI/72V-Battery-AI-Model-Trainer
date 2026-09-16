@@ -1,6 +1,7 @@
 using namespace std;
 #define _USE_MATH_DEFINES
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 #include <stdlib.h>
 #include <stdint.h>
@@ -13,6 +14,13 @@ using namespace std;
 #include <random>
 #include <thread>
 #include <vector>
+#include "battery_csv.h"
+#ifndef AUTOMATIC_EPSILON_CHANGE
+#define AUTOMATIC_EPSILON_CHANGE 1 // 1: automatic reduction, 0: manual change
+#endif
+#if AUTOMATIC_EPSILON_CHANGE != 0 && AUTOMATIC_EPSILON_CHANGE != 1
+#error AUTOMATIC_EPSILON_CHANGE must be 0 or 1
+#endif
 #ifdef __linux__
 #elif _WIN32
 #include <conio.h>
@@ -26,8 +34,9 @@ void apprendi();
 void back_propagate();
 float calculate_max_output_error();
 void evaluate_model(float* error_list, float& max_error, float& average_error, int& max_error_file_index_line, uint16_t* hidden_activation_count);
-void read_weights_from_file();
+bool read_weights_from_file();
 bool write_weights_on_file();
+bool write_epsilon_on_file();
 void read_samples_from_file_diagram_battery();
 void print_hidden_activation_status(const uint16_t* hidden_activation_count);
 //float overallMean(const float* arr1, const float* arr2, int size);
@@ -37,19 +46,31 @@ float calculateVariance(const float* data, int size);
 float mean_value(const float* data, int size);
 float calculateErrorPercentage(float mse, float reference_mean);
 float calculate_cosine_shape_similarity_percentage(const float* arr1, const float* arr2, int size);
-int count_training_samples(int linesPerSample);
+int count_training_samples();
+int get_random_sample_first_line();
 bool get_sample_for_test(int sampleIndex);
+std::vector<battery_csv::Sample> csv_samples;
 void setTime();
 float _err_epoca;
 float _err_rete = 0.00f;
-float _err_amm = 0.009f;
-float _epsilon = 0.05f;
-uint8_t const lines_per_training_sample = 8;
-uint16_t const training_samples = 323;
+float _err_amm = 0.00009f;
+constexpr float epsilon_start = 0.05f;
+#if AUTOMATIC_EPSILON_CHANGE
+constexpr float epsilon_end = 0.000001f;
+constexpr float epsilon_reduction_factor = 0.8f;  // Reduce epsilon , for example, by 20% (0.8) when the error does not improve for a certain number of epochs.
+constexpr uint32_t epsilon_reduction_time_minutes = 10;
+static_assert(epsilon_start >= epsilon_end, "epsilon_start must be greater than or equal to epsilon_end");
+static_assert(epsilon_reduction_factor > 0.0f && epsilon_reduction_factor < 1.0f, "epsilon_reduction_factor must be between zero and one");
+static_assert(epsilon_reduction_time_minutes > 0, "epsilon_reduction_time_minutes must be greater than zero");
+#endif
+float _epsilon = epsilon_start;
+// Samples are parsed by record type: six batteries followed by Wh and amps.
+uint16_t const training_samples = 352;
 const int training_report_epoch_interval = 10000;
 const uint8_t numberOf_X = 2;
 const uint8_t numberOf_H = 25;
 const uint8_t numberOf_Y = 6;
+const float leaky_relu_alpha = 0.01f;
 float output_bias[numberOf_Y] = { 0.00 };
 float hidden_bias[numberOf_H] = { 0.00 };
 float W1[numberOf_X][numberOf_H] = { 0.00 };
@@ -69,8 +90,8 @@ const string _files_name = "72V_Battery.csv";
 float err_min_rete = FLT_MAX;
 float _max_single_traning_output_error_average = 0.00f;
 float _err_epoca_min_value = FLT_MAX;
-float relu(float x) {
-	return (x > 0) ? x : 0;
+float leaky_relu(float value) {
+	return (value > 0.0f) ? value : leaky_relu_alpha * value;
 }
 int main() {
 
@@ -82,7 +103,7 @@ int main() {
 	//SetWindowPos(consoleWindow, nullptr, -1920, 0, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 	//ShowWindow(consoleWindow, SW_MAXIMIZE);
 #endif
-	int number_of_training_samples = count_training_samples(lines_per_training_sample);
+	int number_of_training_samples = count_training_samples();
 	if (number_of_training_samples != training_samples) {
 		cout << "\nError on samples number!!!!!! current value is set to " << training_samples << " but should be " << number_of_training_samples << "\n";
 		return 0;
@@ -102,14 +123,21 @@ int main() {
 #elif _WIN32
 	response = _getch();
 #endif
-	if (response == 'e') {
-		read_weights_from_file();
+	if (response == 'e' || response == 'E') {
+		if (!read_weights_from_file()) {
+			return 1;
+		}
 		predict();
 	}
-	if (response == 'c') {
+	else if (response == 'c') {
+		if (!read_weights_from_file()) {
+			return 1;
+		}
 		cout << "\nmodel loaded.\n";
-		read_weights_from_file();
-		cout << "\nlast inserted epsilon is : " << _epsilon <<
+#if AUTOMATIC_EPSILON_CHANGE
+		cout << "\nautomatic epsilon change enabled. epsilon resumes at: " << _epsilon << "\n";
+#else
+		cout << "\nconfigured epsilon start is : " << _epsilon <<
 			" do you wanna change it? y or n\n";
 #ifdef __linux__
 		response = std::cin.get();
@@ -125,9 +153,10 @@ int main() {
 		else {
 			cout << "\n epsilon not changed\n";
 		}
+#endif
 		apprendi();
 	}
-	if (response == 'n') {
+	else if (response == 'n') {
 		cout << "ATTENTION !!!!!!!!!!!!! are you sure to restart learning? press y to continue !!!!!!!!!!!!!!!!!!!\n\n";
 #ifdef __linux__
 		response = std::cin.get();
@@ -159,47 +188,38 @@ void init() {
 	}
 	//-----------------------------------	console input values + Hidden bias values
 	//cout << "input elements initialization:\n\n";
-	for (int i = 0; i < (numberOf_X); i++)
-	{
+	for (int i = 0; i < (numberOf_X); i++) {
 		//x[i] = 0.00f;
 		cout << "x[" << i << "]" << "=" << x[i] << "\n";
 	}
-	for (int i = 0; i < numberOf_H; i++)
-	{
+	for (int i = 0; i < numberOf_H; i++) {
 		cout << "hidden_bias[" << i << "]" << "=" << hidden_bias[i] << "-BIAS" << "\n";
 	}
 	//-----------------------------------	console hidden values + output bias values
-	for (int i = 0; i < (numberOf_H); i++)
-	{
+	for (int i = 0; i < (numberOf_H); i++) {
 		//h[i] = 0.00f;
 		cout << "h[" << i << "]" << "=" << h[i] << "\n";
 	}
-	for (int i = 0; i < numberOf_Y; i++)
-	{
+	for (int i = 0; i < numberOf_Y; i++) {
 		cout << "output_bias[" << i << "]" << "=" << output_bias[i] << "-BIAS" << "\n";
 	}
 	//cout << "output elements initialization:\n\n";
 	//-----------------------------------	console output values
-	for (int i = 0; i < numberOf_Y; i++)
-	{
+	for (int i = 0; i < numberOf_Y; i++) {
 		//y[i] = 0.00f;
 		cout << "y[" << i << "]=" << y[i] << "\n";
 	}
 	//-----------------------------------	console W1 values
 	cout << "W1 elements initialization:\n\n";
-	for (int i = 0; i < numberOf_X; i++)
-	{
-		for (int k = 0; k < numberOf_H; k++)
-		{
+	for (int i = 0; i < numberOf_X; i++) {
+		for (int k = 0; k < numberOf_H; k++) {
 			W1[i][k] = dist(gen) * init_scale_input;
 			cout << "W1[" << i << "]" << "[" << k << "]" << "=" << W1[i][k] << "\n";
 		}
 	}
 	//-----------------------------------	console W2 values
-	for (int k = 0; k < numberOf_H; k++)
-	{
-		for (int j = 0; j < numberOf_Y; j++)
-		{
+	for (int k = 0; k < numberOf_H; k++) {
+		for (int j = 0; j < numberOf_Y; j++) {
 			W2[k][j] = dist(gen) * init_scale_hidden;
 			cout << "W2[" << k << "]" << "[" << j << "]" << "=" << W2[k][j] << "\n";
 		}
@@ -208,11 +228,33 @@ void init() {
 void predict() {
 	float normalized_observed_output[numberOf_Y] = { 0.00 };
 	//float normalized_predicted_output[numberOf_Y] = { 0.00 };
-	int sampleIndex = 0;
 	while (true) {
-		std::cout << "\nInsert file sample line (Ctrl+C to esc):\n";
-		std::cin >> sampleIndex;
-		get_sample_for_test(sampleIndex);
+		std::cout << "\nPress 'e' for next random sample or 'q' to exit:\n";
+		char execution_command = '\0';
+#ifdef __linux__
+		if (!(std::cin >> execution_command)) {
+			return;
+		}
+#elif _WIN32
+		execution_command = _getch();
+#endif
+		if (execution_command == 'q' || execution_command == 'Q') {
+#ifdef __linux__
+#elif _WIN32
+			for (uint8_t beep_index = 0; beep_index < 5; beep_index++) {
+				Beep(3000, 200);
+			}
+#endif
+			return;
+		}
+		if (execution_command != 'e' && execution_command != 'E') {
+			continue;
+		}
+		int sample_first_line = get_random_sample_first_line();
+		std::cout << "\nRandom sample first line: " << sample_first_line << "\n";
+		if (!get_sample_for_test(sample_first_line)) {
+			continue;
+		}
 		normalizeArray(observed_data, normalized_observed_output, numberOf_Y);
 		x[0] = log(x[0] + 1.00f) / 10.00f;
 		x[1] = log(x[1] + 1.00f) / 10.00f;
@@ -231,20 +273,32 @@ void predict() {
 		std::cout << "varianza = :" << varianza << "\n";
 		std::cout << "cosine similarity percentage = :" << cosine_percentage << "%\n";
 		// Stampa dei risultati
-		std::cout << "\n x[0] = " << (exp(x[0] * 10.00f) - 1.00f) << " x[1] = " << (exp(x[1] * 10.00f) - 1.00f) << "\n"
-			<< "\n y[0] = " << y[0]
-			<< "\n y[1] = " << y[1]
-			<< "\n y[2] = " << y[2]
-			<< "\n y[3] = " << y[3]
-			<< "\n y[4] = " << y[4]
-			<< "\n y[5] = " << y[5];
+		std::cout << "\n Input X1 - Ampere (A) [x[0]] = " << (exp(x[0] * 10.00f) - 1.00f)
+			<< "\n Input X2 - Wattora (Wh) [x[1]] = " << (exp(x[1] * 10.00f) - 1.00f) << "\n";
+		std::ios::fmtflags original_output_flags = std::cout.flags();
+		std::streamsize original_output_precision = std::cout.precision();
+		std::cout << "\n+---------+---------------+---------------+\n"
+			<< "| " << std::left << std::setw(7) << "Battery"
+			<< " | " << std::setw(13) << "Predict (V)"
+			<< " | " << std::setw(13) << "Observed (V)" << " |\n"
+			<< "+---------+---------------+---------------+\n";
+		for (int i = 0; i < numberOf_Y; i++) {
+			std::cout << "| B" << std::left << std::setw(6) << i
+				<< " | " << std::right << std::fixed << std::setprecision(5) << std::setw(13) << y[i]
+				<< " | " << std::setw(13) << observed_data[i] << " |\n";
+		}
+		std::cout << "+---------+---------------+---------------+\n";
+		std::cout.flags(original_output_flags);
+		std::cout.precision(original_output_precision);
 	}
 }
 void apprendi() {
 	int max_error_file_index_line = 0;
 	int _epoca_index = 0;
 	int cout_counter = 0;
-	auto start = std::chrono::system_clock::now();
+#if AUTOMATIC_EPSILON_CHANGE
+	auto last_improvement_or_epsilon_reduction_time = std::chrono::steady_clock::now();
+#endif
 	read_samples_from_file_diagram_battery();
 	float average_err_rete = 0.00f;
 	float varianza_err_rete = 0.00f;
@@ -289,8 +343,31 @@ void apprendi() {
 			}
 			else {
 				setTime();
+#if AUTOMATIC_EPSILON_CHANGE
+				last_improvement_or_epsilon_reduction_time = std::chrono::steady_clock::now();
+#endif
 			}
 		}
+#if AUTOMATIC_EPSILON_CHANGE
+		if (_epsilon > epsilon_end) {
+			auto current_time = std::chrono::steady_clock::now();
+			auto minutes_without_improvement = std::chrono::duration_cast<std::chrono::minutes>(current_time - last_improvement_or_epsilon_reduction_time).count();
+			if (minutes_without_improvement >= epsilon_reduction_time_minutes) {
+				float previous_epsilon = _epsilon;
+				_epsilon *= epsilon_reduction_factor;
+				if (_epsilon < epsilon_end) {
+					_epsilon = epsilon_end;
+				}
+				if (!write_epsilon_on_file()) {
+					_epsilon = previous_epsilon;
+					std::cerr << "\nTraining stopped because the reduced epsilon could not be saved.\n";
+					return;
+				}
+				last_improvement_or_epsilon_reduction_time = current_time;
+				std::cout << "\nepsilon automatically reduced from " << previous_epsilon << " to " << _epsilon << "\n";
+			}
+		}
+#endif
 		if (cout_counter == training_report_epoch_interval) {
 			std::cout << "\nepoca:" << _epoca_index <<
 				"\nerr_epoca=" << _err_epoca <<
@@ -300,8 +377,25 @@ void apprendi() {
 				"\nmedia di errore di rete = " << average_err_rete <<
 				"\ndeviazione standard errore di rete = " << deviazione_std_err_rete <<
 				"\nmax err_epoca is on sample line = " << max_error_file_index_line <<
-				"\npercentage dev.standard err_rete / media err_rete = " << (average_err_rete > 0.0f ? (deviazione_std_err_rete / average_err_rete) * 100.0f : 0.0f) << "%" <<
-				"\nepsilon=" << _epsilon << "\n";
+				"\npercentage dev.standard err_rete / media err_rete = " << (average_err_rete > 0.0f ? (deviazione_std_err_rete / average_err_rete) * 100.0f : 0.0f) << "%";
+#if AUTOMATIC_EPSILON_CHANGE
+			if (_epsilon > epsilon_end) {
+				auto epsilon_status_time = std::chrono::steady_clock::now();
+				auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(epsilon_status_time - last_improvement_or_epsilon_reduction_time).count();
+				long long reduction_interval_seconds = static_cast<long long>(epsilon_reduction_time_minutes) * 60;
+				long long remaining_seconds = reduction_interval_seconds - elapsed_seconds;
+				if (remaining_seconds < 0) {
+					remaining_seconds = 0;
+				}
+				long long remaining_minutes = (remaining_seconds + 59) / 60;
+				std::cout << "\nepsilon=" << _epsilon << " | AUTO x" << epsilon_reduction_factor << " | next change in=" << remaining_minutes << " min\n";
+			}
+			else {
+				std::cout << "\nepsilon=" << _epsilon << " | AUTO x" << epsilon_reduction_factor << " | minimum reached\n";
+			}
+#else
+			std::cout << "\nepsilon=" << _epsilon << " | MANUAL\n";
+#endif
 			print_hidden_activation_status(hidden_activation_count);
 			cout_counter = 0;
 		}
@@ -331,7 +425,7 @@ void forward() {
 		}
 		//insert X bias
 		Zk += hidden_bias[k];
-		h[k] = relu(Zk);
+		h[k] = leaky_relu(Zk);
 	}
 	for (int j = 0; j < numberOf_Y; j++) {
 		float Zj = 0.00f;
@@ -357,11 +451,10 @@ void back_propagate() {
 		// Aggiornamento del bias per il layer di output
 		output_bias[j] += _epsilon * delta;
 	}
-	// Calcolo del delta per il layer nascosto usando la derivata della ReLU
+	// Calcolo del delta per il layer nascosto usando la derivata della Leaky ReLU
 	for (int k = 0; k < numberOf_H; k++) {
-		// Derivata della ReLU: 1 se il neurone è attivo (h[k] > 0), 0 altrimenti
-		float relu_deriv = (h[k] > 0.0f) ? 1.0f : 0.0f;
-		delta = err_H[k] * relu_deriv;
+		float leaky_relu_derivative = (h[k] > 0.0f) ? 1.0f : leaky_relu_alpha;
+		delta = err_H[k] * leaky_relu_derivative;
 		// Aggiornamento dei pesi del layer nascosto
 		for (int i = 0; i < numberOf_X; i++) {
 			W1[i][k] += (_epsilon * delta * x[i]);
@@ -401,7 +494,7 @@ void evaluate_model(float* error_list, float& max_error, float& average_error, i
 		_err_rete = calculate_max_output_error();
 		if (_err_rete > max_error) {
 			max_error = _err_rete;
-			max_error_file_index_line = ((p) * lines_per_training_sample) + 1;
+			max_error_file_index_line = csv_samples[p].first_line;
 		}
 		error_list[p] = _err_rete;
 		average_error += _err_rete;
@@ -413,123 +506,55 @@ void print_hidden_activation_status(const uint16_t* hidden_activation_count) {
 	for (int k = 0; k < numberOf_H; k++) {
 		std::cout << "h[" << k << "]=" << hidden_activation_count[k] << "/" << training_samples;
 		if (hidden_activation_count[k] == 0) {
-			std::cout << " DEAD";
+			std::cout << " LEAKY_ONLY";
 		}
 		std::cout << "\n";
 	}
 }
 void read_samples_from_file_diagram_battery() {
-	//std::cout << "Directory corrente: " << std::filesystem::current_path() << std::endl;
-	std::string filename = _relative_files_path + "/" + _files_name;
-	// Apertura del file
-	std::ifstream file(filename);
-	// Verifica se il file è stato aperto correttamente
-	if (!file.is_open())
-	{
-		std::cerr << "Errore nell'apertura del file " << filename << std::endl;
-	}
-	std::string line;
-	int training_block_index = 0;
-	int training_row_index = 0;
-	int training_row_pre_index = 0;
-	std::string item;
-	stringstream ss1;
-	while (!file.eof())
-	{
-		training_row_pre_index = training_row_index++;
-		switch (training_row_pre_index)
-		{
-		case 0:
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-		case 5:
-			std::getline(file, line);
-			ss1.str(line);
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			battery_out_training[training_block_index][training_row_pre_index] = std::stod(item);
-			cout << "battery[" << training_block_index << "]" << "[" << training_row_pre_index << "] = " << battery_out_training[training_block_index][training_row_pre_index] << "\n";
-			break;
-		case 6:
-			std::getline(file, line);
-			ss1.str(line);
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			watts_hour_training[training_block_index] = std::stod(item);
-			cout << "Watts/hour[" << training_block_index << "] = " << watts_hour_training[training_block_index] << "\n";
-			break;
-		case 7:
-
-			std::getline(file, line);
-			ss1.str(line);
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			std::getline(ss1, item, ';');
-			amps_training[training_block_index] = std::stod(item);
-			cout << "Ampere[" << training_block_index << "] = " << amps_training[training_block_index] << "\n";
-			break;
-		default:
-			training_block_index++;
-			training_row_index = 0;
-			break;
-		}
-	}
-#ifdef __linux__
-#elif _WIN32
-#else
-#endif
-	if ((training_block_index)+1 != training_samples) {
-		cout << "\n\nALLERT!!!!!!! training sample different to index = \t" << training_block_index << "\n";
-#ifdef __linux__
-#elif _WIN32
-		system("pause");
-#else
-#endif
-	}
-	else
-	{
-		//cout << "\n\nTraining sample index is " << training_block_index << " and seems to have been loaded correctly.";
-#ifdef __linux__
-
-#elif _WIN32
-		//system("pause");
-#else
-
-#endif
-	}
-	file.close();
+    if (csv_samples.size() != training_samples)
+        throw std::runtime_error("Numero campioni CSV diverso da training_samples");
+    for (size_t p = 0; p < csv_samples.size(); ++p) {
+        for (int i = 0; i < numberOf_Y; ++i)
+            battery_out_training[p][i] = csv_samples[p].batteries[i];
+        watts_hour_training[p] = csv_samples[p].watt_hours;
+        amps_training[p] = csv_samples[p].amps;
+    }
 }
-void read_weights_from_file() {
+bool read_weights_from_file() {
 	std::ifstream in(_relative_files_path + "/" + "model.hex", std::ios_base::binary);
-	if (in.good()) {
+	if (!in.good()) {
+		std::cerr << "\nUnable to read model file.\n";
+		return false;
+	}
+	for (int k = 0; k < numberOf_H; k++) {
+		for (int i = 0; i < numberOf_X; i++) {
+			in.read((char*)&W1[i][k], sizeof(float));
+		}
+		in.read((char*)&hidden_bias[k], sizeof(float));
+		cout << hidden_bias[k] << "\n";
+	}
+	for (int j = 0; j < numberOf_Y; j++) {
 		for (int k = 0; k < numberOf_H; k++) {
-			for (int i = 0; i < numberOf_X; i++) {
-				in.read((char*)&W1[i][k], sizeof(float));
-			}
-			in.read((char*)&hidden_bias[k], sizeof(float));
-			cout << hidden_bias[k] << "\n";
+			in.read((char*)&W2[k][j], sizeof(float));
 		}
-		for (int j = 0; j < numberOf_Y; j++) {
-			for (int k = 0; k < numberOf_H; k++) {
-				in.read((char*)&W2[k][j], sizeof(float));
-			}
-			in.read((char*)&output_bias[j], sizeof(float));
-		}
+		in.read((char*)&output_bias[j], sizeof(float));
+	}
 	/*	for (int k = 0; k < numberOf_H; k++) {
 			in.read((char*)&hidden_bias[k], sizeof(float));
 		}
 		for (int j = 0; j < numberOf_Y; j++) {
 			in.read((char*)&output_bias[j], sizeof(float));
 		}*/
-		in.read((char*)&_err_epoca_min_value, sizeof(float));
-		in.read((char*)&_epsilon, sizeof(float));
-		//in.read((char*)&x[numberOf_X - 1], sizeof(float));
-		//in.read((char*)&h[numberOf_H - 1], sizeof(float));
+	in.read((char*)&_err_epoca_min_value, sizeof(float));
+	in.read((char*)&_epsilon, sizeof(float));
+	//in.read((char*)&x[numberOf_X - 1], sizeof(float));
+	//in.read((char*)&h[numberOf_H - 1], sizeof(float));
+	if (!in.good() || !std::isfinite(_epsilon) || _epsilon <= 0.0f) {
+		std::cerr << "\nInvalid or incomplete model file.\n";
+		return false;
 	}
+	return true;
 }
 bool write_weights_on_file() {
 	const std::string model_path = _relative_files_path + "/" + "model.hex";
@@ -569,6 +594,24 @@ bool write_weights_on_file() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 	std::cerr << "\nUnable to write model file: " << model_path << "\n";
+	return false;
+}
+bool write_epsilon_on_file() {
+	const std::string model_path = _relative_files_path + "/" + "model.hex";
+	const uint8_t max_write_attempts = 10;
+	for (uint8_t attempt = 0; attempt < max_write_attempts; attempt++) {
+		std::fstream model_file(model_path, std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+		if (model_file.good()) {
+			model_file.seekp(-static_cast<std::streamoff>(sizeof(float)), std::ios_base::end);
+			model_file.write((char*)&_epsilon, sizeof(float));
+			model_file.close();
+			if (model_file.good()) {
+				return true;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	std::cerr << "\nUnable to save epsilon in model file: " << model_path << "\n";
 	return false;
 }
 void normalizeArray(float* arr, float* normArr, int size) {
@@ -695,133 +738,30 @@ void setTime() {
 #endif
 	std::strftime(_global_time, sizeof(_global_time), "%H:%M:%S", &local_time);
 }
+int get_random_sample_first_line() {
+    if (csv_samples.empty()) return -1;
+    static std::mt19937 random_generator(std::random_device{}());
+    std::uniform_int_distribution<size_t> sample_distribution(0, csv_samples.size() - 1);
+    return csv_samples[sample_distribution(random_generator)].first_line;
+}
 bool get_sample_for_test(int sampleIndex) {
-	// Composizione del path completo del file
-	std::string filename = _relative_files_path + "/" + _files_name;
-	std::ifstream file(filename);
-	if (!file.is_open()) {
-		std::cerr << "Errore nell'apertura del file: " << filename << std::endl;
-		return false;
-	}
-	// Ogni campione è composto da 8 righe; calcoliamo la riga iniziale del campione.
-	//const int linesPerSample = 8;
-	int startLine = sampleIndex - 1;// *linesPerSample;
-	// Salta le righe fino al campione desiderato
-	std::string dummy;
-	for (int i = 0; i < startLine; ++i) {
-		if (!std::getline(file, dummy)) {
-			std::cerr << "Errore: file terminato prematuramente durante lo skip fino al campione "
-				<< sampleIndex << std::endl;
-			return false;
-		}
-	}
-	std::string line;
-	std::istringstream ss;
-	std::string token;
-	// Legge le prime 6 righe per aggiornare observed_data
-	for (int i = 0; i < 6; ++i) {
-		if (!std::getline(file, line)) {
-			std::cerr << "Errore: file terminato prematuramente nella lettura di observed_data, campione "
-				<< sampleIndex << std::endl;
-			return false;
-		}
-		if (line.empty()) {
-			--i;
-			continue;
-		}
-		ss.clear();
-		ss.str(line);
-		// Legge il primo token (es. "0")
-		std::getline(ss, token, ';');
-		// Legge il secondo token (es. "B0", "B1", ecc.) e lo scarta
-		std::getline(ss, token, ';');
-		// Legge il terzo token (il valore da utilizzare)
-		std::getline(ss, token, ';');
-		try {
-			observed_data[i] = std::stof(token);
-		}
-		catch (const std::exception& e) {
-			std::cerr << "Errore nella conversione del valore nella riga " << (startLine + i + 1)
-				<< ": \"" << token << "\"." << std::endl;
-			return false;
-		}
-	}
-
-	// Legge la settima riga per aggiornare x[0]
-	if (!std::getline(file, line)) {
-		std::cerr << "Errore: file terminato prematuramente nella lettura di x[0] (riga "
-			<< (startLine + 7) << ")." << std::endl;
-		return false;
-	}
-	while (line.empty() && std::getline(file, line)) {}
-	ss.clear();
-	ss.str(line);
-	// Legge il primo token (es. "watts")
-	std::getline(ss, token, ';');
-	// Salta il secondo token
-	std::getline(ss, token, ';');
-	// Legge il terzo token (il valore per x[0])
-	std::getline(ss, token, ';');
-	try {
-		x[1] = std::stof(token);
-	}
-	catch (const std::exception& e) {
-		std::cerr << "Errore nella conversione del valore nella riga " << (startLine + 7)
-			<< " per x[0]: \"" << token << "\"." << std::endl;
-		return false;
-	}
-
-	// Legge l'ottava riga per aggiornare x[1]
-	if (!std::getline(file, line)) {
-		std::cerr << "Errore: file terminato prematuramente nella lettura di x[1] (riga "
-			<< (startLine + 8) << ")." << std::endl;
-		return false;
-	}
-	while (line.empty() && std::getline(file, line)) {}
-	ss.clear();
-	ss.str(line);
-	// Legge il primo token (es. "amps")
-	std::getline(ss, token, ';');
-	// Salta il secondo token
-	std::getline(ss, token, ';');
-	// Legge il terzo token (il valore per x[1])
-	std::getline(ss, token, ';');
-	try {
-		x[0] = std::stof(token);
-	}
-	catch (const std::exception& e) {
-		std::cerr << "Errore nella conversione del valore nella riga " << (startLine + 8)
-			<< " per x[1]: \"" << token << "\"." << std::endl;
-		return false;
-	}
-	file.close();
-	return true;
+    for (const auto& sample : csv_samples) {
+        if (sample.first_line != sampleIndex) continue;
+        for (int i = 0; i < numberOf_Y; ++i) observed_data[i] = sample.batteries[i];
+        x[0] = sample.amps;
+        x[1] = sample.watt_hours;
+        return true;
+    }
+    std::cerr << "Campione CSV non trovato alla riga " << sampleIndex << std::endl;
+    return false;
 }
-int count_training_samples(int linesPerSample) {
-	// Componi il percorso completo del file
-	std::string filename = _relative_files_path + "/" + _files_name;
-	std::ifstream file(filename);
-	if (!file.is_open()) {
-		std::cerr << "Errore nell'apertura del file: " << filename << std::endl;
-		return -1;
-	}
-	int totalLines = 0;
-	std::string line;
-	// Conta solo le righe non vuote
-	while (std::getline(file, line)) {
-		if (!line.empty())
-			++totalLines;
-	}
-	file.close();
-	// Verifica che il numero totale di righe sia divisibile per linesPerSample
-	if (totalLines % linesPerSample != 0) {
-		std::cerr << "Il numero totale di righe (" << totalLines
-			<< ") non è divisibile per " << linesPerSample << std::endl;
-		return -1;
-	}
-	return totalLines / linesPerSample;
+int count_training_samples() {
+    csv_samples.clear();
+    try {
+        csv_samples = battery_csv::read(_relative_files_path + "/" + _files_name);
+        return static_cast<int>(csv_samples.size());
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return -1;
+    }
 }
-
-
-
-
