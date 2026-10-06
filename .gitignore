@@ -10,3 +10,6 @@ x64/Debug/72V-Battery-AI-Model-Trainer.exe
 x64/
 tmp/
 72V-Battery-AI-Model-Trainer/72V-Battery-AI-Model-Trainer.vcxproj.user
+Neural_Network_Battery_Analyzer/Release/
+Micro_AI_72V_Battery_Analyser/__vm/
+Neural_Network_Battery_Analyzer/Lifepo4-Discharge-Model.vcxproj.user
